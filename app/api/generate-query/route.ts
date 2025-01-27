@@ -8,6 +8,17 @@ const openai = new OpenAI({
   dangerouslyAllowBrowser: true
 });
 
+interface TableColumn {
+  Field: string;
+  Type: string;
+  Null: string;
+  Key: string;
+}
+
+interface TableRow {
+  [key: string]: string;
+}
+
 // Define company entities
 const COMPANIES = {
   1: "SKETCH CASA",
@@ -23,7 +34,7 @@ const COMPANIES = {
 };
 
 // Function to fetch table structure
-async function getTableStructure(tableName: string) {
+async function getTableStructure(tableName: string): Promise<TableColumn[]> {
   try {
     const response = await fetch("https://phpstack-937973-4976355.cloudwaysapps.com/sqleditor.php", {
       method: "POST",
@@ -57,10 +68,10 @@ export async function POST(req: Request) {
     });
     
     const tablesData = await tablesResponse.json();
-    const tables = tablesData.data?.map((row: any) => Object.values(row)[0] as string) || [];
+    const tables = tablesData.data?.map((row: TableRow) => Object.values(row)[0] as string) || [];
 
     // Fetch structure for relevant tables
-    const relevantTables = tables.filter(table => 
+    const relevantTables = tables.filter((table: string) => 
       table.startsWith('llx_') && 
       (prompt.toLowerCase().includes(table) || 
        prompt.toLowerCase().includes(table.replace('llx_', '')))
@@ -71,7 +82,7 @@ export async function POST(req: Request) {
       const structure = await getTableStructure(table);
       if (structure.length > 0) {
         schemaInfo += `\nTable ${table} structure:\n`;
-        schemaInfo += structure.map((col: any) => 
+        schemaInfo += structure.map((col: TableColumn) => 
           `- ${col.Field} (${col.Type})${col.Key === 'PRI' ? ' PRIMARY KEY' : ''}${col.Null === 'YES' ? ' nullable' : ''}`
         ).join('\n');
       }
@@ -85,7 +96,7 @@ export async function POST(req: Request) {
           const structure = await getTableStructure(table);
           if (structure.length > 0) {
             schemaInfo += `\nTable ${table} structure:\n`;
-            schemaInfo += structure.map((col: any) => 
+            schemaInfo += structure.map((col: TableColumn) => 
               `- ${col.Field} (${col.Type})${col.Key === 'PRI' ? ' PRIMARY KEY' : ''}${col.Null === 'YES' ? ' nullable' : ''}`
             ).join('\n');
           }
@@ -149,20 +160,20 @@ export async function POST(req: Request) {
       content: completion.choices[0].message.content
     });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('API error:', error);
     return NextResponse.json(
       { 
-        error: error.message || 'Failed to generate query',
-        details: error.response?.data || error 
+        error: error instanceof Error ? error.message : 'Failed to generate query',
+        details: error instanceof Error ? error : 'Unknown error'
       },
-      { status: error.status || 500 }
+      { status: 500 }
     );
   }
 }
 
 // Add CORS headers
-export async function OPTIONS(req: Request) {
+export async function OPTIONS(_req: Request) {
   return new NextResponse(null, {
     status: 200,
     headers: {
