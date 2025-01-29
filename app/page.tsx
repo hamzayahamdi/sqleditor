@@ -8,10 +8,8 @@ import {
   Play, 
   Table as TableIcon, 
   AlertCircle, 
-  Download, 
   Copy, 
   History, 
-  Save,
   Code2,
   FileDown,
   LogOut
@@ -20,9 +18,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DataTable } from "@/components/DataTable"
 import { SchemaExplorer } from "@/components/SchemaExplorer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Resizable } from "re-resizable"
 import { QueryAssistant } from "@/components/QueryAssistant"
 import { useRouter } from "next/navigation"
+import type { editor, languages, Position } from 'monaco-editor'
+import type { Monaco } from '@monaco-editor/react'
 
 // Enhanced SQL Keywords with descriptions
 const SQL_COMPLETIONS = {
@@ -70,7 +69,7 @@ const executeSQL = async (sql: string) => {
       throw new Error(data.error || 'Query failed');
     }
     return data;
-  } catch (e) {
+  } catch {
     console.error('Raw response:', text);
     throw new Error('Invalid response from server');
   }
@@ -81,17 +80,19 @@ interface QueryResult {
   [key: string]: string | number;
 }
 
+interface TableRow {
+  [key: string]: string;
+}
+
 export default function SQLEditor() {
   const [sql, setSql] = useState("")
   const [result, setResult] = useState<QueryResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [queryHistory, setQueryHistory] = useState<{ sql: string, timestamp: string }[]>([])
-  const [editorHeight, setEditorHeight] = useState("60vh")
   const [activeTab, setActiveTab] = useState("results")
   const [tableNames, setTableNames] = useState<string[]>([])
-  const [editorInstance, setEditorInstance] = useState<any>(null)
-  const [monacoInstance, setMonacoInstance] = useState<any>(null)
+  const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -110,7 +111,6 @@ export default function SQLEditor() {
   useEffect(() => {
     const fetchTableNames = async () => {
       try {
-        // First check if we're authenticated
         const isAuth = sessionStorage.getItem("sqlEditorAuth") || 
                       document.cookie.includes("sqlEditorAuth=true");
         
@@ -119,30 +119,26 @@ export default function SQLEditor() {
           return;
         }
 
-        // Fetch tables with proper error handling
         const result = await executeSQL("SHOW TABLES;");
-        console.log("Table fetch result:", result); // Debug log
+        console.log("Table fetch result:", result);
 
         if (result && result.data && Array.isArray(result.data)) {
-          const names = result.data.map((row: any) => {
-            // Handle different possible response formats
+          const names = result.data.map((row: TableRow) => {
             if (typeof row === 'string') return row;
             if (typeof row === 'object') {
-              // Get the first value from the object
               return Object.values(row)[0] as string;
             }
             return null;
-          }).filter((name): name is string => name !== null);
+          }).filter((name: string | null): name is string => name !== null);
 
-          console.log("Processed table names:", names); // Debug log
+          console.log("Processed table names:", names);
           setTableNames(names);
 
-          // After getting table names, fetch columns for each table
           names.forEach(async (tableName: string) => {
             try {
               const columnsResult = await executeSQL(`SHOW COLUMNS FROM \`${tableName}\`;`);
               if (columnsResult.data) {
-                const columns = columnsResult.data.map((row: any) => ({
+                const columns = columnsResult.data.map((row: TableRow) => ({
                   table: tableName,
                   column: row.Field,
                   type: row.Type
@@ -153,8 +149,6 @@ export default function SQLEditor() {
               console.error(`Failed to fetch columns for ${tableName}:`, err);
             }
           });
-        } else {
-          console.error("Invalid table data format:", result);
         }
       } catch (err) {
         console.error("Failed to fetch schema:", err);
@@ -164,13 +158,14 @@ export default function SQLEditor() {
     fetchTableNames();
   }, [router]);
 
-  // Effect to register completion provider when tables are loaded
   useEffect(() => {
     if (!monacoInstance || !tableNames.length) return;
 
-    // Dispose previous provider if exists
-    let disposable = monacoInstance.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (model: any, position: any) => {
+    const disposable = monacoInstance.languages.registerCompletionItemProvider('sql', {
+      provideCompletionItems: (
+        model: editor.ITextModel,
+        position: Position
+      ): languages.ProviderResult<languages.CompletionList> => {
         const wordInfo = model.getWordUntilPosition(position);
         const word = wordInfo.word.toLowerCase();
         
@@ -184,44 +179,43 @@ export default function SQLEditor() {
           endColumn: wordInfo.endColumn
         };
 
-        let suggestions = [];
-
-        // Add table suggestions
-        const filteredTables = tableNames.filter(table => 
-          table.toLowerCase().includes(word)
-        );
-
-        suggestions.push(...filteredTables.map(table => ({
-          label: { label: table, description: 'Table' },
-          kind: monacoInstance.languages.CompletionItemKind.Class,
-          documentation: `Table: ${table}`,
-          insertText: table,
-          range: range,
-          sortText: '0' + table,
-          filterText: table.toLowerCase(),
-          preselect: true
-        })));
-
-        // Add keyword suggestions
-        suggestions.push(...SQL_COMPLETIONS.keywords.map(keyword => ({
-          label: { label: keyword.label, description: keyword.detail },
-          kind: monacoInstance.languages.CompletionItemKind.Keyword,
-          insertText: keyword.insertText,
-          range: range,
-          sortText: '1' + keyword.label,
-          filterText: keyword.label.toLowerCase()
-        })));
-
-        // Add function suggestions
-        suggestions.push(...SQL_COMPLETIONS.functions.map(func => ({
-          label: { label: func.label, description: func.detail },
-          kind: monacoInstance.languages.CompletionItemKind.Function,
-          insertText: func.insertText,
-          insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          range: range,
-          sortText: '2' + func.label,
-          filterText: func.label.toLowerCase()
-        })));
+        const suggestions: languages.CompletionItem[] = [
+          // Table suggestions
+          ...tableNames
+            .filter(name => name.toLowerCase().includes(word))
+            .map(name => ({
+              label: name,
+              kind: monacoInstance.languages.CompletionItemKind.Class,
+              insertText: name,
+              sortText: '0' + name,
+              range: range,
+              detail: 'Table',
+              documentation: `Table: ${name}`
+            })),
+          // SQL Keywords
+          ...SQL_COMPLETIONS.keywords
+            .filter(kw => kw.label.toLowerCase().includes(word))
+            .map(kw => ({
+              label: kw.label,
+              kind: monacoInstance.languages.CompletionItemKind.Keyword,
+              insertText: kw.insertText,
+              sortText: '1' + kw.label,
+              range: range,
+              detail: kw.detail
+            })),
+          // SQL Functions
+          ...SQL_COMPLETIONS.functions
+            .filter(fn => fn.label.toLowerCase().includes(word))
+            .map(fn => ({
+              label: fn.label,
+              kind: monacoInstance.languages.CompletionItemKind.Function,
+              insertText: fn.insertText,
+              sortText: '2' + fn.label,
+              range: range,
+              detail: fn.detail,
+              insertTextRules: monacoInstance.languages.CompletionItemInsertTextRule.InsertAsSnippet
+            }))
+        ];
 
         return { suggestions };
       },
@@ -235,8 +229,10 @@ export default function SQLEditor() {
     };
   }, [monacoInstance, tableNames]);
 
-  const handleEditorDidMount = (editor: any, monaco: any) => {
-    setEditorInstance(editor);
+  const handleEditorDidMount = (
+    editor: editor.IStandaloneCodeEditor,
+    monaco: Monaco
+  ) => {
     setMonacoInstance(monaco);
   }
 
@@ -288,8 +284,7 @@ export default function SQLEditor() {
     }
   };
 
-  const formatSQL = (e?: React.MouseEvent) => {
-    // Basic SQL formatting (you might want to use a proper SQL formatter library)
+  const formatSQL = () => {
     const formatted = sql
       .replace(/\s+/g, ' ')
       .replace(/ (SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT)/gi, '\n$1')
@@ -336,7 +331,7 @@ export default function SQLEditor() {
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Top Bar */}
         <div className="h-14 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between px-4">
           <div className="flex items-center gap-4">
@@ -455,11 +450,9 @@ export default function SQLEditor() {
                     </TabsTrigger>
                   </TabsList>
                   {result && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
                       onClick={downloadResults}
-                      className="hover:bg-gradient-to-r hover:from-emerald-500 hover:to-emerald-700 text-slate-200"
+                      className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 text-white"
                     >
                       <FileDown className="h-4 w-4 mr-2" />
                       Export CSV
