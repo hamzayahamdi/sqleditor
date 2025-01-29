@@ -109,6 +109,8 @@ export async function POST(req: Request) {
           role: "system",
           content: `You are a SQL expert assistant helping users write queries for a Dolibarr ERP database with multi-company module enabled. 
 
+          ${schemaInfo}
+
           Entity/Company Mapping (use these entity IDs, NOT llx_societe):
           - SKETCH CASA (entity = 1)
           - SKETCH RABAT (entity = 2)

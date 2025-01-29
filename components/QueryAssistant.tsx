@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Send, Clipboard, Play } from "lucide-react"
+import { Loader2, Send, Play } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface QueryAssistantProps {
@@ -57,7 +57,7 @@ export function QueryAssistant({ onSelectQuery }: QueryAssistantProps) {
     const query = queryMatch ? queryMatch[1].trim() : '';
     
     // Get explanation by removing the SQL code block
-    let explanation = response.replace(/```sql[\s\S]*?```/, '').trim();
+    const explanation = response.replace(/```sql[\s\S]*?```/, '').trim();
     
     return { query, explanation };
   };

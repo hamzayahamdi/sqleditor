@@ -9,16 +9,13 @@ import {
   Table as TableIcon, 
   AlertCircle, 
   Copy, 
-  History, 
   Code2,
-  FileDown,
   LogOut,
   Database
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DataTable } from "@/components/DataTable"
 import { SchemaExplorer } from "@/components/SchemaExplorer"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { QueryAssistant } from "@/components/QueryAssistant"
 import { useRouter } from "next/navigation"
 import type { editor, languages, Position } from 'monaco-editor'
@@ -90,8 +87,6 @@ export default function SQLEditor() {
   const [result, setResult] = useState<QueryResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [queryHistory, setQueryHistory] = useState<{ sql: string, timestamp: string }[]>([])
-  const [activeTab, setActiveTab] = useState("results")
   const [tableNames, setTableNames] = useState<string[]>([])
   const [monacoInstance, setMonacoInstance] = useState<Monaco | null>(null)
   const router = useRouter()
@@ -270,13 +265,6 @@ export default function SQLEditor() {
       const result = await executeSQL(sql.trim());
       setResult(result.data);
       
-      // Add to history
-      setQueryHistory(prev => [{
-        sql: sql.trim(),
-        timestamp: new Date().toISOString()
-      }, ...prev].slice(0, 50));
-      
-      setActiveTab("results");
     } catch (err) {
       console.error("Query execution error:", err);
       setError(err instanceof Error ? err.message : "Failed to execute query");
@@ -298,28 +286,9 @@ export default function SQLEditor() {
     navigator.clipboard.writeText(sql);
   };
 
-  const downloadResults = () => {
-    if (!result) return;
-    
-    const csv = [
-      Object.keys(result[0]).join(','),
-      ...result.map(row => Object.values(row).join(','))
-    ].join('\n');
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'query-results.csv';
-    a.click();
-  };
-
   const handleLogout = () => {
-    // Clear both cookie and session storage
     document.cookie = "sqlEditorAuth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     sessionStorage.removeItem("sqlEditorAuth");
-    
-    // Force a router refresh and navigation
     router.refresh();
     router.push("/login");
   }
@@ -417,22 +386,12 @@ export default function SQLEditor() {
 
           {/* Results Section */}
           <div className="h-1/2 flex flex-col min-h-0">
-            {/* Results Toolbar */}
-            <div className="h-10 border-b border-gray-800 bg-gray-900/30 flex items-center justify-between px-3">
+            {/* Results Toolbar - Removed Export button */}
+            <div className="h-10 border-b border-gray-800 bg-gray-900/30 flex items-center px-3">
               <div className="flex items-center gap-2">
                 <TableIcon className="h-4 w-4 text-slate-400" />
                 <span className="text-sm text-slate-200">Query Results</span>
               </div>
-              {result && (
-                <Button
-                  size="sm"
-                  onClick={downloadResults}
-                  className="h-7 bg-emerald-500 hover:bg-emerald-600"
-                >
-                  <FileDown className="h-4 w-4 mr-2" />
-                  Export
-                </Button>
-              )}
             </div>
 
             {/* Results Content */}
