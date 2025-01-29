@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronRight, Database, Table, KeyRound, Loader2 } from "lucide-react"
+import { ChevronRight, Database, Table, KeyRound, Loader2, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 
@@ -141,14 +141,14 @@ export function SchemaExplorer({ onSelectTable }: SchemaExplorerProps) {
                   <Table className="h-4 w-4 text-slate-400 mx-2" />
                   <span className="text-slate-200 text-sm flex-1">{tableName}</span>
                   <Button
-                    variant="ghost"
                     size="sm"
-                    className="opacity-0 group-hover:opacity-100"
+                    className="opacity-0 group-hover:opacity-100 h-7 bg-blue-500 hover:bg-blue-600 text-slate-100 gap-2 font-medium"
                     onClick={(e) => {
                       e.stopPropagation()
                       onSelectTable?.(`SELECT * FROM \`${tableName}\` LIMIT 100;`)
                     }}
                   >
+                    <Play className="h-4 w-4" />
                     Query
                   </Button>
                 </div>

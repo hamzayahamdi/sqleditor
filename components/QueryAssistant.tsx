@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Send, Clipboard } from "lucide-react"
+import { Loader2, Send, Clipboard, Play } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface QueryAssistantProps {
@@ -52,16 +52,15 @@ export function QueryAssistant({ onSelectQuery }: QueryAssistantProps) {
     }
   }
 
-  const useGeneratedQuery = () => {
-    // Extract SQL query from the response (assuming it's wrapped in code blocks)
-    const queryMatch = response.match(/```sql\n([\s\S]*?)\n```/) || 
-                      response.match(/```([\s\S]*?)```/) ||
-                      [null, response]
-    const query = queryMatch[1]?.trim()
-    if (query) {
-      onSelectQuery(query)
-    }
-  }
+  const extractQueryAndExplanation = (response: string) => {
+    const queryMatch = response.match(/```sql\n([\s\S]*?)\n```/);
+    const query = queryMatch ? queryMatch[1].trim() : '';
+    
+    // Get explanation by removing the SQL code block
+    let explanation = response.replace(/```sql[\s\S]*?```/, '').trim();
+    
+    return { query, explanation };
+  };
 
   return (
     <div className="flex flex-col h-full bg-slate-900/50 border-l border-slate-800">
@@ -108,22 +107,31 @@ export function QueryAssistant({ onSelectQuery }: QueryAssistantProps) {
           </div>
 
           {response && (
-            <div className="mt-6">
+            <div className="mt-6 space-y-4">
+              {/* Explanation Section */}
               <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
-                <pre className="text-sm text-slate-200 whitespace-pre-wrap">
-                  {response}
-                </pre>
-                <div className="mt-4 flex justify-end">
+                <h3 className="text-sm font-medium text-slate-200 mb-2">Explanation</h3>
+                <div className="text-sm text-slate-300 whitespace-pre-wrap">
+                  {extractQueryAndExplanation(response).explanation}
+                </div>
+              </div>
+
+              {/* Query Section */}
+              <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-medium text-slate-200">Generated Query</h3>
                   <Button
-                    variant="outline"
                     size="sm"
-                    onClick={useGeneratedQuery}
-                    className="text-slate-200 border-slate-700"
+                    onClick={() => onSelectQuery(extractQueryAndExplanation(response).query)}
+                    className="h-7 bg-blue-500 hover:bg-blue-600 text-slate-100 gap-2 font-medium"
                   >
-                    <Clipboard className="mr-2 h-4 w-4" />
-                    Use This Query
+                    <Play className="h-4 w-4" />
+                    Use this query
                   </Button>
                 </div>
+                <pre className="text-sm text-slate-200 whitespace-pre-wrap bg-slate-900/50 p-3 rounded-md">
+                  {extractQueryAndExplanation(response).query}
+                </pre>
               </div>
             </div>
           )}

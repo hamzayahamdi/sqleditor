@@ -8,7 +8,8 @@ if (!process.env.OPENAI_API_KEY) {
 
 // Initialize OpenAI with API key
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY || '',  // Provide empty string as fallback
+  apiKey: process.env.OPENAI_API_KEY,
+  baseURL: "https://api.openai.com/v1", // Make sure we're using the correct base URL
 });
 
 interface TableColumn {
@@ -108,41 +109,41 @@ export async function POST(req: Request) {
           role: "system",
           content: `You are a SQL expert assistant helping users write queries for a Dolibarr ERP database with multi-company module enabled. 
 
-          Available Companies (entity IDs):
-          - 1: SKETCH CASA
-          - 2: SKETCH RABAT
-          - 5: SKETCH TANGER
-          - 6: SKETCH MARRAKECH
-          - 7: SKE
-          - 8: OUTDOORZ
-          - 10: OUTLET RABAT
-          - 11: COMPTA_CASA
-          - 12: COMPTA_RABAT
-          - 13: COMPTA_TANGER
+          Entity/Company Mapping (use these entity IDs, NOT llx_societe):
+          - SKETCH CASA (entity = 1)
+          - SKETCH RABAT (entity = 2)
+          - SKETCH TANGER (entity = 5)
+          - SKETCH MARRAKECH (entity = 6)
+          - SKE (entity = 7)
+          - OUTDOORZ (entity = 8)
+          - OUTLET RABAT (entity = 10)
+          - COMPTA_CASA (entity = 11)
+          - COMPTA_RABAT (entity = 12)
+          - COMPTA_TANGER (entity = 13)
           
-          Database Schema Information:
-          ${schemaInfo}
+          Important Rules:
+          1. When filtering by company/store, ALWAYS use the 'entity' column with the specific entity ID
+          2. DO NOT use llx_societe to filter by company - use the entity IDs directly
+          3. Each record in the tables has an 'entity' column that corresponds to the company IDs above
+          4. When user mentions a store/company name, use the corresponding entity ID
           
-          Important notes for multi-company queries:
-          - When filtering by company, ALWAYS use the 'entity' column with the specific entity ID
-          - Do NOT use llx_societe to filter by company - use the entity IDs directly
-          - Each record in the tables has an 'entity' column that corresponds to the company IDs above
-          - Example: To get data for SKETCH CASA, use "WHERE entity = 1"
-          - Example: To get data for multiple SKETCH stores, use "WHERE entity IN (1, 2, 5, 6)"
-          - For accounting data, use the COMPTA entities (11, 12, 13)
+          Examples:
+          - For SKETCH CASA data: WHERE entity = 1
+          - For SKETCH RABAT data: WHERE entity = 2
+          - For all SKETCH stores: WHERE entity IN (1, 2, 5, 6)
+          - For all COMPTA entities: WHERE entity IN (11, 12, 13)
           
           Company Groups:
           - SKETCH Stores: entities 1, 2, 5, 6 (Casa, Rabat, Tanger, Marrakech)
           - COMPTA Entities: entities 11, 12, 13 (Casa, Rabat, Tanger)
           - Special Entities: SKE (7), OUTDOORZ (8), OUTLET RABAT (10)
           
-          Keep responses focused and format SQL queries within \`\`\`sql code blocks.
-          Always explain:
-          1. Which companies/entities are being queried
-          2. Why those specific entity IDs were chosen
-          3. Any multi-company considerations
+          Format your response as:
+          1. Brief explanation of what the query does
+          2. SQL query in a code block using \`\`\`sql
+          3. Additional notes if needed
           
-          Use proper table aliases and JOIN conditions.`
+          Always use proper table aliases and JOIN conditions.`
         },
         {
           role: "user",

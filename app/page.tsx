@@ -12,7 +12,8 @@ import {
   History, 
   Code2,
   FileDown,
-  LogOut
+  LogOut,
+  Database
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DataTable } from "@/components/DataTable"
@@ -324,72 +325,76 @@ export default function SQLEditor() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-gray-900 to-gray-950">
-      {/* Left Sidebar - Schema Explorer */}
-      <div className="hidden md:block h-screen">
-        <SchemaExplorer onSelectTable={(query) => setSql(query)} />
+    <div className="h-screen flex flex-col bg-gradient-to-br from-gray-900 to-gray-950">
+      {/* Top Navigation Bar - Removed Run Query button */}
+      <div className="h-14 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between px-4">
+        <div className="flex items-center gap-4">
+          <Database className="h-5 w-5 text-indigo-400" />
+          <h1 className="text-lg font-semibold text-slate-200">SQL Editor</h1>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="ghost"
+            onClick={handleLogout}
+            className="hover:bg-red-500/10 text-slate-200"
+          >
+            <LogOut className="h-4 w-4 sm:mr-2" />
+            <span className="hidden sm:inline">Logout</span>
+          </Button>
+        </div>
       </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-h-0">
-        {/* Top Bar */}
-        <div className="h-14 border-b border-gray-800 bg-gray-900/50 flex items-center justify-between px-4">
-          <div className="flex items-center gap-4">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={formatSQL}
-              className="hover:bg-gradient-to-r hover:from-indigo-500 hover:to-indigo-700 text-slate-200"
-            >
-              <Code2 className="h-4 w-4 mr-2" />
-              Format
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={copyToClipboard}
-              className="hover:bg-gradient-to-r hover:from-indigo-500 hover:to-indigo-700 text-slate-200"
-            >
-              <Copy className="h-4 w-4 mr-2" />
-              Copy
-            </Button>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              onClick={executeQuery}
-              disabled={loading}
-              className="bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Executing...
-                </>
-              ) : (
-                <>
-                  <Play className="mr-2 h-4 w-4" />
-                  Execute Query
-                </>
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleLogout}
-              className="hover:bg-gradient-to-r hover:from-red-500 hover:to-red-700 text-slate-200"
-            >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
-            </Button>
-          </div>
+      {/* Main Content */}
+      <div className="flex-1 flex overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="w-72 border-r border-gray-800 flex flex-col bg-gray-900/30">
+          <SchemaExplorer onSelectTable={(query) => setSql(query)} />
         </div>
 
-        {/* Split View Container */}
-        <div className="flex-1 flex flex-col min-h-0">
-          {/* Editor and Assistant Split */}
-          <div className="h-[30vh] flex border-b border-gray-800">
-            {/* Editor Panel */}
-            <div className="flex-1">
+        {/* Center Content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Query Editor Section with Run Query button */}
+          <div className="h-1/2 border-b border-gray-800 flex flex-col">
+            {/* Editor Toolbar */}
+            <div className="h-10 border-b border-gray-800 bg-gray-900/30 flex items-center px-3 gap-2">
+              <Button 
+                size="sm" 
+                onClick={formatSQL}
+                className="h-7 bg-indigo-500 hover:bg-indigo-600 text-slate-100 gap-2 font-medium"
+              >
+                <Code2 className="h-4 w-4" />
+                Format
+              </Button>
+              <Button 
+                size="sm" 
+                onClick={copyToClipboard}
+                className="h-7 bg-emerald-500 hover:bg-emerald-600 text-slate-100 gap-2 font-medium"
+              >
+                <Copy className="h-4 w-4" />
+                Copy
+              </Button>
+              <Button
+                size="sm"
+                onClick={executeQuery}
+                disabled={loading}
+                className="h-7 bg-blue-500 hover:bg-blue-600 text-slate-100 gap-2 ml-auto font-medium disabled:bg-blue-500/50 disabled:text-slate-300"
+              >
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Running...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-4 w-4" />
+                    <span>Run Query</span>
+                  </>
+                )}
+              </Button>
+            </div>
+            
+            {/* Editor */}
+            <div className="flex-1 min-h-0">
               <Editor
                 value={sql}
                 onChange={(value) => setSql(value || "")}
@@ -400,116 +405,66 @@ export default function SQLEditor() {
                 options={{
                   minimap: { enabled: false },
                   fontSize: 14,
-                  padding: { top: 16 },
+                  padding: { top: 8 },
                   lineNumbers: "on",
                   scrollBeyondLastLine: false,
                   wordWrap: "on",
-                  wrappingIndent: "indent",
-                  automaticLayout: true,
-                  suggestOnTriggerCharacters: true,
-                  quickSuggestions: {
-                    other: true,
-                    comments: false,
-                    strings: true
-                  },
-                  suggest: {
-                    preview: true,
-                    showIcons: true,
-                    showStatusBar: true,
-                    showInlineDetails: true,
-                    filterGraceful: false,
-                    snippetsPreventQuickSuggestions: false,
-                    localityBonus: true,
-                    shareSuggestSelections: true,
-                    selectionMode: "always"
-                  },
-                  tabSize: 2,
+                  automaticLayout: true
                 }}
               />
             </div>
+          </div>
 
-            {/* AI Assistant Panel */}
-            <div className="w-96">
-              <QueryAssistant onSelectQuery={(query) => setSql(query)} />
+          {/* Results Section */}
+          <div className="h-1/2 flex flex-col min-h-0">
+            {/* Results Toolbar */}
+            <div className="h-10 border-b border-gray-800 bg-gray-900/30 flex items-center justify-between px-3">
+              <div className="flex items-center gap-2">
+                <TableIcon className="h-4 w-4 text-slate-400" />
+                <span className="text-sm text-slate-200">Query Results</span>
+              </div>
+              {result && (
+                <Button
+                  size="sm"
+                  onClick={downloadResults}
+                  className="h-7 bg-emerald-500 hover:bg-emerald-600"
+                >
+                  <FileDown className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+              )}
+            </div>
+
+            {/* Results Content */}
+            <div className="flex-1 overflow-auto p-4">
+              {error ? (
+                <Alert variant="destructive">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              ) : result ? (
+                <DataTable 
+                  data={result} 
+                  columns={Object.keys(result[0] || {}).map(key => ({
+                    accessorKey: key,
+                    header: key
+                  }))}
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full text-gray-400">
+                  <div className="text-center">
+                    <TableIcon className="h-8 w-8 mb-2 mx-auto text-gray-500" />
+                    <p>Execute a query to see results</p>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+        </div>
 
-          {/* Results Panel - Now takes remaining space */}
-          <div className="flex-1 min-h-0">
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
-              <div className="border-b border-gray-800 bg-gray-900/50">
-                <div className="flex items-center justify-between px-4">
-                  <TabsList className="h-12">
-                    <TabsTrigger value="results" className="gap-2">
-                      <TableIcon className="h-4 w-4" />
-                      Results
-                    </TabsTrigger>
-                    <TabsTrigger value="history" className="gap-2">
-                      <History className="h-4 w-4" />
-                      History
-                    </TabsTrigger>
-                  </TabsList>
-                  {result && (
-                    <Button
-                      onClick={downloadResults}
-                      className="bg-gradient-to-r from-emerald-500 to-emerald-700 hover:from-emerald-600 hover:to-emerald-800 text-white"
-                    >
-                      <FileDown className="h-4 w-4 mr-2" />
-                      Export CSV
-                    </Button>
-                  )}
-                </div>
-              </div>
-
-              <TabsContent value="results" className="flex-1 overflow-auto p-4">
-                {error ? (
-                  <div className="mb-4">
-                    <Alert variant="destructive">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>{error}</AlertDescription>
-                    </Alert>
-                  </div>
-                ) : result ? (
-                  <DataTable 
-                    data={result} 
-                    columns={Object.keys(result[0] || {}).map(key => ({
-                      accessorKey: key,
-                      header: key
-                    }))}
-                  />
-                ) : (
-                  <div className="flex items-center justify-center h-full text-gray-400">
-                    <div className="text-center">
-                      <TableIcon className="h-8 w-8 mb-2 mx-auto text-gray-500" />
-                      <p>Execute a query to see results</p>
-                    </div>
-                  </div>
-                )}
-              </TabsContent>
-
-              <TabsContent value="history" className="flex-1 overflow-auto p-4">
-                <div className="space-y-2">
-                  {queryHistory.map((item, index) => (
-                    <div
-                      key={index}
-                      className="p-4 rounded-lg bg-gray-800/50 border border-gray-700 cursor-pointer hover:bg-gray-800"
-                      onClick={() => {
-                        setSql(item.sql);
-                        setActiveTab("results");
-                      }}
-                    >
-                      <div className="text-sm text-gray-400 mb-2">
-                        {new Date(item.timestamp).toLocaleString()}
-                      </div>
-                      <pre className="text-sm text-gray-300 whitespace-pre-wrap">
-                        {item.sql}
-                      </pre>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-            </Tabs>
-          </div>
+        {/* Right Sidebar - AI Assistant */}
+        <div className="w-80 border-l border-gray-800 bg-gray-900/30">
+          <QueryAssistant onSelectQuery={(query) => setSql(query)} />
         </div>
       </div>
     </div>
