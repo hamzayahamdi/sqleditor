@@ -1,11 +1,14 @@
 import OpenAI from 'openai';
 import { NextResponse } from 'next/server';
-import { env } from '@/lib/env';
+
+// Check for API key
+if (!process.env.OPENAI_API_KEY) {
+  console.error('OPENAI_API_KEY is not set in environment variables');
+}
 
 // Initialize OpenAI with API key
 const openai = new OpenAI({
-  apiKey: env.OPENAI_API_KEY,
-  dangerouslyAllowBrowser: true
+  apiKey: process.env.OPENAI_API_KEY || '',  // Provide empty string as fallback
 });
 
 interface TableColumn {
@@ -18,20 +21,6 @@ interface TableColumn {
 interface TableRow {
   [key: string]: string;
 }
-
-// Define company entities
-const COMPANIES = {
-  1: "SKETCH CASA",
-  2: "SKETCH RABAT",
-  5: "SKETCH TANGER",
-  6: "SKETCH MARRAKECH",
-  7: "SKE",
-  8: "OUTDOORZ",
-  10: "OUTLET RABAT",
-  11: "COMPTA_CASA",
-  12: "COMPTA_RABAT",
-  13: "COMPTA_TANGER"
-};
 
 // Function to fetch table structure
 async function getTableStructure(tableName: string): Promise<TableColumn[]> {
@@ -51,6 +40,14 @@ async function getTableStructure(tableName: string): Promise<TableColumn[]> {
 
 export async function POST(req: Request) {
   try {
+    // Check for API key before making requests
+    if (!process.env.OPENAI_API_KEY) {
+      return NextResponse.json(
+        { error: 'OpenAI API key not configured' },
+        { status: 500 }
+      );
+    }
+
     const { prompt } = await req.json();
 
     if (!prompt) {
@@ -173,7 +170,7 @@ export async function POST(req: Request) {
 }
 
 // Add CORS headers
-export async function OPTIONS(_req: Request) {
+export async function OPTIONS(): Promise<NextResponse> {
   return new NextResponse(null, {
     status: 200,
     headers: {

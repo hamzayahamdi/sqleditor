@@ -9,46 +9,61 @@ interface SchemaExplorerProps {
   onSelectTable?: (query: string) => void
 }
 
+interface TableRow {
+  [key: string]: string;
+}
+
+interface ColumnData {
+  Field: string;
+  Type: string;
+  Null: string;
+  Key: string;
+}
+
+interface TableDetails {
+  [tableName: string]: ColumnData[];
+}
+
 export function SchemaExplorer({ onSelectTable }: SchemaExplorerProps) {
   const [tables, setTables] = useState<string[]>([])
-  const [tableDetails, setTableDetails] = useState<Record<string, any[]>>({})
+  const [tableDetails, setTableDetails] = useState<TableDetails>({})
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [expandedTable, setExpandedTable] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    const fetchTables = async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const response = await fetch("https://phpstack-937973-4976355.cloudwaysapps.com/sqleditor.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: "SHOW TABLES;" })
+        })
+
+        const data = await response.json()
+        
+        if (data.data) {
+          const tableNames = data.data.map((row: TableRow) => Object.values(row)[0] as string)
+          setTables(tableNames)
+          
+          // Fetch details for first table immediately
+          if (tableNames.length > 0) {
+            await fetchTableColumns(tableNames[0])
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch tables:', err)
+        setError('Failed to load tables')
+      } finally {
+        setLoading(false)
+      }
+    }
+
     fetchTables()
   }, [])
-
-  const fetchTables = async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const response = await fetch("https://phpstack-937973-4976355.cloudwaysapps.com/sqleditor.php", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sql: "SHOW TABLES;" })
-      })
-
-      const data = await response.json()
-      
-      if (data.data) {
-        const tableNames = data.data.map((row: any) => Object.values(row)[0] as string)
-        setTables(tableNames)
-        
-        // Fetch details for first table immediately
-        if (tableNames.length > 0) {
-          await fetchTableColumns(tableNames[0])
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch tables:', err)
-      setError('Failed to load tables')
-    } finally {
-      setLoading(false)
-    }
-  }
 
   const fetchTableColumns = async (tableName: string) => {
     try {
@@ -140,7 +155,7 @@ export function SchemaExplorer({ onSelectTable }: SchemaExplorerProps) {
 
                 {expandedTable === tableName && tableDetails[tableName] && (
                   <div className="ml-9 mt-1 border-l border-slate-800 pl-4">
-                    {tableDetails[tableName].map((column: any) => (
+                    {tableDetails[tableName].map((column: ColumnData) => (
                       <div
                         key={column.Field}
                         className="py-1 px-2 text-sm flex items-center gap-2"

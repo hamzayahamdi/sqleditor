@@ -1,17 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Editor, BeforeMount } from "@monaco-editor/react"
+import { Editor } from "@monaco-editor/react"
 import { Button } from "@/components/ui/button"
 import { 
   Loader2, 
   Play, 
   Table as TableIcon, 
   AlertCircle, 
-  Download, 
   Copy, 
   History, 
-  Save,
   Code2,
   FileDown,
   LogOut
@@ -20,228 +18,203 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DataTable } from "@/components/DataTable"
 import { SchemaExplorer } from "@/components/SchemaExplorer"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Resizable } from "re-resizable"
 import { QueryAssistant } from "@/components/QueryAssistant"
 import { useRouter } from "next/navigation"
+import type { editor, languages, Position } from 'monaco-editor'
+import type { Monaco } from '@monaco-editor/react'
 
-// SQL Keywords for autocomplete
-const SQL_KEYWORDS = [
-  "SELECT", "FROM", "WHERE", "INSERT", "UPDATE", "DELETE", "DROP", "CREATE", "ALTER",
-  "TABLE", "DATABASE", "INDEX", "VIEW", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER",
-  "GROUP BY", "ORDER BY", "HAVING", "LIMIT", "OFFSET", "AS", "IN", "BETWEEN", "LIKE",
-  "IS NULL", "IS NOT NULL", "ASC", "DESC", "DISTINCT", "COUNT", "SUM", "AVG", "MAX",
-  "MIN", "AND", "OR", "NOT", "CASE", "WHEN", "THEN", "ELSE", "END", "UNION", "ALL"
-]
+interface TableRow {
+  [key: string]: string
+}
 
-const executeSQL = async (sql: string) => {
-  const response = await fetch("https://phpstack-937973-4976355.cloudwaysapps.com/sqleditor.php", {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ sql })
-  });
+interface APIResponse {
+  success: boolean
+  data: TableRow[]
+  error?: string
+}
 
-  if (!response.ok) {
-    throw new Error(`HTTP error! status: ${response.status}`);
-  }
-
-  const text = await response.text();
-  
-  try {
-    const data = JSON.parse(text);
-    if (!data.success) {
-      throw new Error(data.error || 'Query failed');
-    }
-    return data;
-  } catch (e) {
-    console.error('Raw response:', text);
-    throw new Error('Invalid response from server');
-  }
-};
+interface QueryResult {
+  [key: string]: string | number
+}
 
 export default function SQLEditor() {
   const [sql, setSql] = useState("")
-  const [result, setResult] = useState<any[] | null>(null)
+  const [result, setResult] = useState<QueryResult[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [queryHistory, setQueryHistory] = useState<{ sql: string, timestamp: string }[]>([])
-  const [editorHeight, setEditorHeight] = useState("60vh")
   const [activeTab, setActiveTab] = useState("results")
   const [tableNames, setTableNames] = useState<string[]>([])
   const router = useRouter()
 
+  // Authentication check
   useEffect(() => {
-    const checkAuth = () => {
-      const isAuth = sessionStorage.getItem("sqlEditorAuth") || 
-                    document.cookie.includes("sqlEditorAuth=true");
-      
-      if (!isAuth) {
-        router.push("/login");
+    const isAuth = sessionStorage.getItem("sqlEditorAuth") || 
+                  document.cookie.includes("sqlEditorAuth=true")
+    if (!isAuth) router.push("/login")
+  }, [router])
+
+  // Fetch table names
+  useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        const response = await fetch("https://phpstack-937973-4976355.cloudwaysapps.com/sqleditor.php", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sql: "SHOW TABLES;" })
+        })
+        const result: APIResponse = await response.json()
+        if (result.success && Array.isArray(result.data)) {
+          const tables = result.data.map((row: TableRow) => Object.values(row)[0] as string)
+          setTableNames(tables)
+        }
+      } catch (err) {
+        console.error("Failed to fetch tables:", err)
       }
-    };
-
-    checkAuth();
-  }, [router]);
-
-  // Add useEffect to fetch table names on mount
-  useEffect(() => {
-    fetchTableNames()
+    }
+    fetchTables()
   }, [])
 
-  const fetchTableNames = async () => {
-    try {
-      const result = await executeSQL("SHOW TABLES;")
-      if (result.data) {
-        const names = result.data.map((row: any) => Object.values(row)[0] as string)
-        setTableNames(names)
-      }
-    } catch (err) {
-      console.error("Failed to fetch table names:", err)
-    }
-  }
-
-  // Configure Monaco Editor before mounting
-  const handleEditorBeforeMount: BeforeMount = (monaco) => {
-    // Register SQL language features
-    monaco.languages.registerCompletionItemProvider('sql', {
-      provideCompletionItems: (model, position) => {
-        const word = model.getWordUntilPosition(position);
-        const range = {
-          startLineNumber: position.lineNumber,
-          endLineNumber: position.lineNumber,
-          startColumn: word.startColumn,
-          endColumn: word.endColumn
-        };
-
-        // Get text before cursor to determine context
-        const lineContent = model.getLineContent(position.lineNumber);
-        const textUntilPosition = lineContent.substring(0, position.column - 1).toLowerCase();
-
-        let suggestions = [];
-
-        // Add table name suggestions after FROM or JOIN
-        if (textUntilPosition.includes('from') || textUntilPosition.includes('join')) {
-          suggestions.push(...tableNames.map(tableName => ({
-            label: tableName,
-            kind: monaco.languages.CompletionItemKind.Class,
-            insertText: tableName,
-            range: range,
-            detail: 'Table',
-            documentation: `Table: ${tableName}`
-          })));
-        }
-
-        // Add SQL keywords
-        suggestions.push(...SQL_KEYWORDS.map(keyword => ({
-          label: keyword,
-          kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: keyword,
-          range: range
-        })));
-
-        // Add common SQL functions
-        const SQL_FUNCTIONS = [
-          'COUNT', 'SUM', 'AVG', 'MAX', 'MIN', 'CONCAT', 'UPPER', 'LOWER',
-          'DATE', 'NOW', 'YEAR', 'MONTH', 'DAY', 'HOUR', 'MINUTE', 'SECOND'
-        ];
-
-        suggestions.push(...SQL_FUNCTIONS.map(func => ({
-          label: func,
-          kind: monaco.languages.CompletionItemKind.Function,
-          insertText: func,
-          range: range
-        })));
-
-        return { suggestions };
-      },
-      triggerCharacters: [' ', '.', '`']
-    });
-
-    // Add custom SQL theme
-    monaco.editor.defineTheme('sqlTheme', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [
-        { token: 'keyword', foreground: '569CD6', fontStyle: 'bold' },
-        { token: 'string', foreground: 'CE9178' },
-        { token: 'number', foreground: 'B5CEA8' },
-        { token: 'comment', foreground: '6A9955', fontStyle: 'italic' }
-      ],
-      colors: {
-        'editor.background': '#1E1E1E',
-        'editor.foreground': '#D4D4D4',
-        'editor.lineHighlightBackground': '#2F2F2F',
-        'editorCursor.foreground': '#569CD6',
-        'editor.selectionBackground': '#264F78'
-      }
-    });
-  }
-
+  // Execute SQL query
   const executeQuery = async () => {
-    if (!sql.trim()) return;
-
-    setLoading(true);
-    setError(null);
-    setResult(null);
+    if (!sql.trim()) return
+    setLoading(true)
+    setError(null)
+    setResult(null)
 
     try {
-      const result = await executeSQL(sql.trim());
-      setResult(result.data);
+      const response = await fetch("https://phpstack-937973-4976355.cloudwaysapps.com/sqleditor.php", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sql: sql.trim() })
+      })
+      const result = await response.json()
       
-      // Add to history
+      if (!result.success) throw new Error(result.error || 'Query failed')
+      
+      setResult(result.data)
       setQueryHistory(prev => [{
         sql: sql.trim(),
         timestamp: new Date().toISOString()
-      }, ...prev].slice(0, 50));
-      
-      setActiveTab("results");
+      }, ...prev].slice(0, 50))
+      setActiveTab("results")
     } catch (err) {
-      console.error("Query execution error:", err);
-      setError(err instanceof Error ? err.message : "Failed to execute query");
+      setError(err instanceof Error ? err.message : "Failed to execute query")
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
+
+  // Editor configuration
+  const editorOptions: editor.IStandaloneEditorConstructionOptions = {
+    minimap: { enabled: false },
+    fontSize: 14,
+    padding: { top: 16 },
+    lineNumbers: "on",
+    scrollBeyondLastLine: false,
+    wordWrap: "on",
+    wrappingIndent: "indent",
+    automaticLayout: true,
+    suggestOnTriggerCharacters: true,
+    quickSuggestions: true,
+    suggest: {
+      preview: true,
+      showIcons: true,
+      showStatusBar: true,
+      showInlineDetails: true,
+      filterGraceful: false,
+      snippetsPreventQuickSuggestions: false
+    }
+  }
+
+  // Editor setup function with proper types
+  const handleEditorDidMount = (editor: editor.IStandaloneCodeEditor, monaco: Monaco) => {
+    monaco.languages.registerCompletionItemProvider('sql', {
+      provideCompletionItems: (
+        model: editor.ITextModel,
+        position: Position
+      ): languages.ProviderResult<languages.CompletionList> => {
+        const wordInfo = model.getWordUntilPosition(position)
+        const word = wordInfo.word.toLowerCase()
+        
+        const range = {
+          startLineNumber: position.lineNumber,
+          endLineNumber: position.lineNumber,
+          startColumn: wordInfo.startColumn,
+          endColumn: wordInfo.endColumn
+        }
+
+        const suggestions: languages.CompletionItem[] = [
+          // Table suggestions
+          ...tableNames
+            .filter(name => name.toLowerCase().includes(word))
+            .map(name => ({
+              label: name,
+              kind: monaco.languages.CompletionItemKind.Class,
+              insertText: name,
+              sortText: '0' + name,
+              range: range
+            })),
+          // SQL Keywords
+          ...['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'GROUP BY', 'ORDER BY', 'LIMIT']
+            .filter(kw => kw.toLowerCase().includes(word))
+            .map(kw => ({
+              label: kw,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: kw + ' ',
+              sortText: '1' + kw,
+              range: range
+            })),
+          // SQL Functions
+          ...['COUNT(*)', 'SUM', 'AVG', 'MAX', 'MIN', 'NOW()']
+            .filter(fn => fn.toLowerCase().includes(word))
+            .map(fn => ({
+              label: fn,
+              kind: monaco.languages.CompletionItemKind.Function,
+              insertText: fn,
+              sortText: '2' + fn,
+              range: range
+            }))
+        ]
+
+        return { suggestions }
+      },
+      triggerCharacters: [' ', '.', '`']
+    })
+  }
 
   const formatSQL = () => {
-    // Basic SQL formatting (you might want to use a proper SQL formatter library)
     const formatted = sql
       .replace(/\s+/g, ' ')
       .replace(/ (SELECT|FROM|WHERE|GROUP BY|ORDER BY|HAVING|LIMIT)/gi, '\n$1')
       .replace(/ (LEFT|RIGHT|INNER|OUTER) JOIN/gi, '\n$1 JOIN')
-      .trim();
-    setSql(formatted);
-  };
+      .trim()
+    setSql(formatted)
+  }
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(sql);
-  };
+    navigator.clipboard.writeText(sql)
+  }
 
   const downloadResults = () => {
-    if (!result) return;
-    
+    if (!result) return
     const csv = [
       Object.keys(result[0]).join(','),
       ...result.map(row => Object.values(row).join(','))
-    ].join('\n');
-    
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'query-results.csv';
-    a.click();
-  };
+    ].join('\n')
+    const blob = new Blob([csv], { type: 'text/csv' })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'query-results.csv'
+    a.click()
+  }
 
   const handleLogout = () => {
-    // Clear both cookie and session storage
-    document.cookie = "sqlEditorAuth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
-    sessionStorage.removeItem("sqlEditorAuth");
-    
-    // Force a router refresh and navigation
-    router.refresh();
-    router.push("/login");
+    document.cookie = "sqlEditorAuth=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT"
+    sessionStorage.removeItem("sqlEditorAuth")
+    router.refresh()
+    router.push("/login")
   }
 
   return (
@@ -316,20 +289,8 @@ export default function SQLEditor() {
                 onChange={(value) => setSql(value || "")}
                 language="sql"
                 theme="sqlTheme"
-                beforeMount={handleEditorBeforeMount}
-                options={{
-                  minimap: { enabled: false },
-                  fontSize: 14,
-                  padding: { top: 16 },
-                  lineNumbers: "on",
-                  scrollBeyondLastLine: false,
-                  wordWrap: "on",
-                  wrappingIndent: "indent",
-                  automaticLayout: true,
-                  suggestOnTriggerCharacters: true,
-                  quickSuggestions: true,
-                  tabSize: 2,
-                }}
+                onMount={handleEditorDidMount}
+                options={editorOptions}
               />
             </div>
 

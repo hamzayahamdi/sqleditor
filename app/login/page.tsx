@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Loader2, Lock, Database } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { cookies } from 'next/headers'
 
 export default function LoginPage() {
   const [password, setPassword] = useState("")
@@ -31,7 +30,7 @@ export default function LoginPage() {
       } else {
         setError("Invalid password")
       }
-    } catch (err) {
+    } catch {
       setError("An error occurred")
     } finally {
       setLoading(false)

@@ -9,9 +9,20 @@ interface TableSidebarProps {
   onSelectTable: (tableName: string) => void
 }
 
+interface TableColumn {
+  Field: string;
+  Type: string;
+  Null: string;
+  Key: string;
+}
+
 interface TableInfo {
-  name: string
-  fields: string[]
+  name: string;
+  fields: string[];
+}
+
+interface TableRow {
+  [key: string]: string;
 }
 
 export function TableSidebar({ onSelectTable }: TableSidebarProps) {
@@ -40,7 +51,7 @@ export function TableSidebar({ onSelectTable }: TableSidebarProps) {
         }
 
         const data = await response.json()
-        const tableNames = data.data.map((row: any) => Object.values(row)[0] as string)
+        const tableNames = data.data.map((row: TableRow) => Object.values(row)[0] as string)
 
         const tablesWithFields = await Promise.all(
           tableNames.map(async (tableName: string) => {
@@ -52,7 +63,7 @@ export function TableSidebar({ onSelectTable }: TableSidebarProps) {
               body: JSON.stringify({ sql: `DESCRIBE ${tableName}` }),
             })
             const fieldsData = await fieldsResponse.json()
-            const fields = fieldsData.data.map((field: any) => field.Field)
+            const fields = fieldsData.data.map((field: TableColumn) => field.Field)
             return { name: tableName, fields }
           }),
         )
